@@ -48,7 +48,7 @@ class MobileIDClient:
     TEST_NAME = "DEMO"
 
     POLL_INTERVALS = [10, 10, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 15, 20]
-    API_REQUEST_TIMEOUT_MILLISECS = 10000
+    API_REQUEST_TIMEOUT_MILLISECS = 60 * 1000  # one minute
 
     def __init__(self, live: bool = False, uuid: str = None, name: str = None):
         if live and (not uuid or not name):
@@ -134,16 +134,14 @@ class MobileIDClient:
         See https://github.com/SK-EID/MID#333-request-parameters
         """
         url_path = f"authentication/session/{session_id}?timeoutMs={self.API_REQUEST_TIMEOUT_MILLISECS}"
-        # Two minutes total polling intervals time, starts from end
-        poll_intervals = self.POLL_INTERVALS.copy()
-        while poll_intervals:
+        RETRY_ATTEMPTS = 5  # allow up to 5 minutes for authentication
+        for _ in range(0, RETRY_ATTEMPTS):
             try:
-                # Sleep before the first call so that the user can enter the PIN
-                time.sleep(poll_intervals.pop())
+                # Session endpoint uses long polling, so this call may block API_REQUEST_TIMEOUT_MILLISECS milliseconds
                 response_dict = _mobile_id_api_request(requests.get, self.url, url_path)
                 _verify_state_in_authentication_response(response_dict)
 
-                # Check if the transaction is still running, i.e. not completed yet
+                # Retry if the transaction is still running, i.e. not completed yet
                 if response_dict["state"] == "RUNNING":
                     continue
 
